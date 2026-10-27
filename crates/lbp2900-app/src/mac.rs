@@ -28,6 +28,7 @@ enum Msg {
     Info(String),
     Installed,
     UpdateFailed(Release, String),
+    InstallNow(String),
 }
 
 /// 22×22 template icon: a simple printer silhouette.
@@ -71,12 +72,38 @@ fn run_admin(shell: &str) -> Result<String, String> {
     }
 }
 
+/// Banner notification. macOS attributes osascript notifications to Script Editor,
+/// so clicking one opens it; use [`alert`] for anything the user should act on.
 fn notify(text: &str) {
     let script = format!(
         "display notification \"{}\" with title \"LBP2900 Driver\"",
         text.replace('"', "'")
     );
     let _ = Command::new("/usr/bin/osascript").args(["-e", &script]).spawn();
+}
+
+/// Small alert window with an OK button (does not block the menu).
+fn alert(text: &str) {
+    let script = format!(
+        "display alert \"LBP2900 Driver\" message \"{}\"",
+        text.replace('"', "'")
+    );
+    let _ = Command::new("/usr/bin/osascript").args(["-e", &script]).spawn();
+}
+
+/// Ask whether to install `version` now; false for "Later" or no answer.
+fn ask_install(version: &str) -> bool {
+    let script = format!(
+        "display dialog \"Canon LBP2900 driver {version} is available (you have {}). Install it now?\" \
+         with title \"LBP2900 Driver\" buttons {{\"Later\", \"Install\"}} default button \"Install\" \
+         with icon note giving up after 600",
+        updater::CURRENT
+    );
+    Command::new("/usr/bin/osascript")
+        .args(["-e", &script])
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).contains("button returned:Install"))
+        .unwrap_or(false)
 }
 
 fn printer_status() -> String {
@@ -122,7 +149,7 @@ fn check_updates(tx: &Sender<Msg>, manual: bool) {
 
 fn install_update(tx: &Sender<Msg>, rel: Release) {
     spawn(tx, move |tx| {
-        let _ = tx.send(Msg::Info(format!("Downloading {}…", rel.version)));
+        notify(&format!("Downloading {}…", rel.version));
         // Not temp_dir(): an app started by an installer inherits its sandbox TMPDIR,
         // which is deleted once that install finishes.
         let dir = PathBuf::from(std::env::var_os("HOME").unwrap_or_else(|| "/Users/Shared".into()))
@@ -187,6 +214,7 @@ pub fn run() {
     let menu_rx = MenuEvent::receiver();
     let mut ui: Option<Ui> = None;
     let mut pending: Option<Release> = None;
+    let mut asked: Option<String> = None;
     let mut next_status = Instant::now();
     let mut next_update = Instant::now() + Duration::from_secs(10);
 
@@ -215,15 +243,31 @@ pub fn run() {
                 Msg::UpdateFound(r) => {
                     ui.update.set_text(format!("Install Update {}…", r.version));
                     ui.update.set_enabled(true);
-                    notify(&format!("Driver update {} is available", r.version));
+                    // Ask once per version; the menu item stays available either way.
+                    if asked.as_deref() != Some(r.version.as_str()) {
+                        asked = Some(r.version.clone());
+                        let version = r.version.clone();
+                        spawn(&tx, move |tx| {
+                            if ask_install(&version) {
+                                let _ = tx.send(Msg::InstallNow(version));
+                            }
+                        });
+                    }
                     pending = Some(r);
                 }
-                Msg::UpToDate => notify(&format!("You have the latest version ({})", updater::CURRENT)),
-                Msg::Info(s) => notify(&s),
+                Msg::InstallNow(version) => {
+                    if let Some(r) = pending.take_if(|r| r.version == version) {
+                        ui.update.set_text(format!("Installing {}…", r.version));
+                        ui.update.set_enabled(false);
+                        install_update(&tx, r);
+                    }
+                }
+                Msg::UpToDate => alert(&format!("You have the latest version ({}).", updater::CURRENT)),
+                Msg::Info(s) => alert(&s),
                 Msg::UpdateFailed(r, e) => {
                     ui.update.set_text(format!("Install Update {}… (last try failed)", r.version));
                     ui.update.set_enabled(true);
-                    notify(&format!("Update {} failed: {e}", r.version));
+                    alert(&format!("Update {} failed: {e}", r.version));
                     pending = Some(r);
                 }
                 Msg::Installed => {
