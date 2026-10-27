@@ -42,8 +42,13 @@ codesign --force --sign - "$ROOT/Applications/$APP"
 install -m 0644 packaging/launchagent.plist "$ROOT/Library/LaunchAgents/$ID.app.plist"
 
 chmod 0755 packaging/scripts/*
-pkgbuild --root "$ROOT" --scripts packaging/scripts --identifier "$ID" --version "$VERSION" \
-  --install-location / --ownership recommended dist/component.pkg
+# Always install the app into /Applications: a relocatable bundle would be "updated"
+# wherever Installer finds another copy with the same bundle id instead.
+pkgbuild --analyze --root "$ROOT" dist/components.plist
+plutil -replace 0.BundleIsRelocatable -bool NO dist/components.plist
+pkgbuild --root "$ROOT" --component-plist dist/components.plist --scripts packaging/scripts \
+  --identifier "$ID" --version "$VERSION" --install-location / --ownership recommended dist/component.pkg
 productbuild --package dist/component.pkg "dist/LBP2900-Driver-$VERSION.pkg"
-rm dist/component.pkg
+# Leave no app copy behind for Installer to find on this machine.
+rm -rf dist/component.pkg dist/components.plist "$ROOT"
 echo "built dist/LBP2900-Driver-$VERSION.pkg"

@@ -115,7 +115,7 @@ dependencies = [
 
 [[package]]
 name = "capt"
-version = "0.1.1"
+version = "0.1.2"
 
 [[package]]
 name = "cc"
@@ -917,7 +917,7 @@ checksum = "20870f649af7073d53e38067b2a84312175d56ea15217e1b15bc83506ec50afb"
 
 [[package]]
 name = "lbp2900-app"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -928,7 +928,7 @@ dependencies = [
 
 [[package]]
 name = "lbp2900-backend"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "capt",
  "rusb",
@@ -1486,7 +1486,7 @@ dependencies = [
 
 [[package]]
 name = "rastertocapt"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "capt",
 ]
