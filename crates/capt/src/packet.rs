@@ -7,6 +7,7 @@ pub mod op {
     pub const BEGIN_DATA: u16 = 0xD0A1; // IcBeginData
     pub const END_PAGE: u16 = 0xD0A2; // IcEndPage
     pub const SET_REF_DESC: u16 = 0xD0A4; // IcColorPlane (K plane compression references)
+    pub const PAGE_SETUP: u16 = 0xD0A9; // the four D0Ax packets above sent as one
     pub const VIDEO_DATA: u16 = 0xC0A0; // IcVideoData
     pub const VIDEO_END: u16 = 0xC0A4; // IcBlackEnd
 
@@ -35,6 +36,7 @@ pub mod op {
     pub const START_PRINT: u16 = 0xE0A7;
     pub const RELEASE: u16 = 0xE0A9;
     pub const SET_JOB_INFO: u16 = 0xE1A1;
+    pub const SET_LED: u16 = 0xE1A2;
     pub const SET_PRINTED_PAGES: u16 = 0xE1A6;
 
     /// Human-readable name for logs.
@@ -44,6 +46,7 @@ pub mod op {
             BEGIN_DATA => "BeginData",
             END_PAGE => "EndPage",
             SET_REF_DESC => "SetRefDesc",
+            PAGE_SETUP => "PageSetup",
             VIDEO_DATA => "VideoData",
             VIDEO_END => "VideoEnd",
             PAPER_STATUS => "PaperStatus",
@@ -70,6 +73,7 @@ pub mod op {
             START_PRINT => "StartPrint",
             RELEASE => "Release",
             SET_JOB_INFO => "SetJobInfo",
+            SET_LED => "SetLed",
             SET_PRINTED_PAGES => "SetPrintedPages",
             _ => "?",
         }

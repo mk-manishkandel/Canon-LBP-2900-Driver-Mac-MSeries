@@ -5,9 +5,11 @@ for current macOS on Apple Silicon (and Intel). Canon's last Mac driver
 (CAPT v10.0.9) has no LBP2900 model; this driver speaks the printer's CAPT
 protocol directly over USB.
 
-> **Status: experimental.** The compression, page format and USB transport are
-> implemented from a study of Canon's driver, but the printer conversation has not
-> yet been confirmed on real hardware. Expect a few test releases before it prints.
+> **Status: experimental.** The printer conversation follows the LBP2900 sequence of
+> [captdriver](https://github.com/mounaiban/captdriver) (with the status fix from
+> [canon-LBP2900-for-macOS](https://github.com/duy12i1i7/canon-LBP2900-for-macOS)),
+> which prints on real hardware. This Rust implementation is not yet confirmed on a
+> printer.
 
 No Canon code or files are included. The protocol was learned by studying Canon's
 public macOS driver package; see [docs/re-notes.md](docs/re-notes.md).

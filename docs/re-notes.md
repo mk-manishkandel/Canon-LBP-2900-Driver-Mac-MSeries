@@ -177,3 +177,39 @@ Per position (lines independent, matches stop at line end, max 0x3FFF):
    front); else if b == 0 → `00000010`; else `0010` + 8 bits (b ^ 0xFF); then push b.
 References before the start of the block are invalid. End: `0000000111`, flush partial
 byte (zero padded), XOR 0xBC, pad with 0xBC to a multiple of 4 bytes.
+
+## LBP2900 job sequence (from captdriver)
+
+The engine conversation now follows captdriver's LBP2900 path
+(github.com/mounaiban/captdriver), which prints on real hardware, including the macOS
+fix from github.com/duy12i1i7/canon-LBP2900-for-macOS: always poll the extended
+status `A0A8`, because the page counters only live in that record. Only protocol
+facts are used here; no captdriver code is copied.
+
+Status record (bytes after the 4-byte reply header): `u16` words at 0, 8, 10, 12,
+24, 30, 38; page counters decoding/printing/out/completed at 14/16/18/20 and
+received at 34. Word 0 bits: 7 busy, 5/4 uninitialised, 2 buffer full, 1 no paper.
+Some replies carry their length in BCD.
+
+```
+A1A1, A0A8, A3A2, A2A0 (00 00 1E 00 00 00 00 00) → job = reply u16
+E1A2 (13 00 … 16 bytes), wait ready, E1A1 stage 1, wait ready
+per page:
+  if uninitialised: E0A3, E0A2, E0A4, wait, E0A5 (EE DB EA AD + 12 × 00), wait
+  wait while buffer full
+  D0A9 { D0A0 page params, D0A4 refs, D0A1, D0A2 }
+  C0A0 … (each 70-line band compressed on its own; E0A0 busy check every 16th)
+  C0A4
+  wait page_received == page_decoding; E1A1 stage 2 (page = decoding), wait
+  E0A7 (u16 decoding), wait; E1A1 stage 6; wait page_out == decoding
+end: wait page_completed == decoding; E1A1 stage 4; E0A9 (u16 job)
+```
+
+`E1A1` payload (72 bytes): `u32 0, u16 page, u16 0, u16 0 ×3 (name lengths), u16 0,
+u8 stage, u8 1, u16 job, i16 -60, i16 -120, u16 year-1900, u8 month0, u8 day,
+u8 h, u8 m, u8 s, u8 1, 40 × 00`.
+
+Page params: darkness byte `0`, then `1C 1C 1C`; byte +22 (image refinement) `2`;
+margins 14 pt; line bytes = page width in points; printable width and line count
+in pixels. Hi-SCoA bytes are XORed with 0x43 and its codes are the bit-inverse of
+the Slim codes above, so Slim output (XOR 0xBC) is the same bitstream.

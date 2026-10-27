@@ -1,19 +1,10 @@
 # LBP2900 backend tuning. Copy to /Library/Printers/LBP2900/lbp2900.conf (as root)
 # and edit; the next print job picks it up. Defaults are shown.
-#
-# These switch steps of the printer conversation that are still being confirmed
-# on real hardware. Change them only when asked to while debugging.
 
-# send_job_info = true      # E1A1 job information after reserving the printer
-# clear_before_job = true   # E0A2 ClearError + E0A4 DiscardData before the first page
-# start_print = true        # E0A7 StartPrint before each page's image data
-# go_online = true          # E0A5 GoOnline after each page
-# go_online_arg = 0
-# reserve_arg = 0           # argument of the A2A0 reserve request
-# page_timeout = 120        # seconds to wait for a page to finish
-# poll_interval_ms = 500
+# page_timeout = 20         # seconds to wait for each printer step before carrying on
+# poll_interval_ms = 100    # status poll interval while waiting
 # read_timeout_ms = 5000
 
 # Network queues (lbp2900://HOST/QUEUE?transport=lpd) cannot read the printer's
-# answers, so the session number the printer would hand out is assumed:
+# answers, so the job number the printer would hand out is assumed:
 # blind_session = 0

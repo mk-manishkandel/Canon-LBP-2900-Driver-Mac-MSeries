@@ -8,7 +8,7 @@ use std::io::{self, BufReader, BufWriter, Read, Write};
 use std::process::ExitCode;
 
 use capt::halftone::{Halftoner, Method};
-use capt::page::{PageEncoder, PageSettings, Paper, DPI, MARGIN_LEFT, MARGIN_TOP};
+use capt::page::{PageEncoder, PageSettings, Paper, DPI};
 use capt::raster::{PageHeader, RasterReader, CSPACE_K};
 use capt::spool;
 
@@ -112,14 +112,14 @@ fn convert<R: Read, W: Write>(input: R, out: &mut W, opts: &Options) -> io::Resu
         // Precompute raster column for every target column.
         let cols: Vec<Option<usize>> = (0..width)
             .map(|x| {
-                let page_x = x as i64 + MARGIN_LEFT as i64 - ox;
+                let page_x = x as i64 + paper.image_left_px() as i64 - ox;
                 let rx = page_x * res as i64 / DPI as i64;
                 (page_x >= 0 && rx < h.width as i64).then_some(rx as usize)
             })
             .collect();
 
         for y in 0..lines {
-            let page_y = y as i64 + MARGIN_TOP as i64 - oy;
+            let page_y = y as i64 + paper.image_top_px() as i64 - oy;
             let ry = page_y * res_y as i64 / DPI as i64;
             if page_y >= 0 && ry < h.height as i64 {
                 let ry = ry as u32;
@@ -217,18 +217,22 @@ mod tests {
         let mut spool = spool::SpoolReader::new(&out[..]).unwrap();
         let page = spool.next_page().unwrap().unwrap();
         let pkts = packet::split(&page).unwrap();
-        let params = pkts[0];
+        assert_eq!(packet::header(pkts[0]).unwrap().0, op::PAGE_SETUP);
+        let params = &pkts[0][4..];
         assert_eq!(packet::header(params).unwrap().0, op::SET_PAGE_PARAMS);
         let lb = u16::from_le_bytes([params[30], params[31]]) as usize;
-        let data: Vec<u8> = pkts
+        // Each band is compressed on its own and fits in one packet here.
+        let bitmap: Vec<u8> = pkts
             .iter()
             .filter(|p| packet::header(p).unwrap().0 == op::VIDEO_DATA)
-            .flat_map(|p| p[4..].to_vec())
+            .flat_map(|p| slim::decompress(&p[4..], lb, &RefDesc::P1080).unwrap())
             .collect();
-        let bitmap = slim::decompress(&data, lb, &RefDesc::P1080).unwrap();
+        let a4 = Paper::by_name("A4").unwrap();
+        assert_eq!(bitmap.len(), lb * a4.image_height_px() as usize);
         let px = |x: usize, y: usize| bitmap[y * lb + x / 8] & (0x80 >> (x % 8)) != 0;
-        // Page (1050, 2050) → printable area (1050 - 120, 2050 - 96).
-        assert!(px(1050 - MARGIN_LEFT as usize, 2050 - MARGIN_TOP as usize));
+        // Page (1050, 2050) → image (1050 - 100, 2050 - 118).
+        let (left, top) = (a4.image_left_px() as usize, a4.image_top_px() as usize);
+        assert!(px(1050 - left, 2050 - top));
         assert!(!px(500, 500));
         let black: u32 = bitmap.iter().map(|b| b.count_ones()).sum();
         assert_eq!(black, 100 * 100);

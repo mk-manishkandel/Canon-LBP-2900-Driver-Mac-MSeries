@@ -1,4 +1,7 @@
 //! Page geometry and the per-page CAPT packet sequence for the P1080 engine.
+//!
+//! Layout and packet order follow captdriver's LBP2900 support, which prints on real
+//! hardware (see `docs/re-notes.md`).
 
 use crate::packet::{op, PacketBuilder};
 use crate::slim::{self, RefDesc};
@@ -7,12 +10,12 @@ use crate::slim::{self, RefDesc};
 pub const ENGINE_ID_P1080: u16 = 0x2A30;
 pub const DPI: u32 = 600;
 
-/// Non-printable margins at 600 dpi, from the LBP3000 PPD's ImageableArea
-/// (14.40 pt left/right, 11.52 pt top, 17.04 pt bottom).
-pub const MARGIN_LEFT: u32 = 120;
-pub const MARGIN_RIGHT: u32 = 120;
-pub const MARGIN_TOP: u32 = 96;
-pub const MARGIN_BOTTOM: u32 = 142;
+/// 5 mm hardware margin on every side, at 600 dpi and in points.
+pub const MARGIN: u32 = 118;
+pub const MARGIN_PT: u16 = 14;
+
+/// Lines per independently compressed band.
+pub const BAND_LINES: usize = 70;
 
 /// Largest data payload in one `C0A0` packet (captmoncnab3 `CopyPage2`).
 pub const MAX_VIDEO_CHUNK: usize = 0xFF00;
@@ -61,32 +64,44 @@ impl Paper {
             .iter()
             .find(|p| (p.width_pt as f32 - w).abs() <= 3.0 && (p.height_pt as f32 - h).abs() <= 3.0)
     }
-    /// Printable image width in pixels (rounded up to 32 pixels like Canon's filter).
+    /// Bytes per image line: the page width in points, as captdriver sends it.
+    pub fn image_line_bytes(&self) -> usize {
+        self.width_pt as usize
+    }
     pub fn image_width_px(&self) -> u32 {
-        (self.width_px - MARGIN_LEFT - MARGIN_RIGHT + 31) & !31
+        self.image_line_bytes() as u32 * 8
+    }
+    /// The image lines are centred horizontally on the page.
+    pub fn image_left_px(&self) -> u32 {
+        self.width_px.saturating_sub(self.image_width_px()) / 2
+    }
+    pub fn image_top_px(&self) -> u32 {
+        MARGIN
     }
     pub fn image_height_px(&self) -> u32 {
-        self.height_px - MARGIN_TOP - MARGIN_BOTTOM
+        self.height_px - 2 * MARGIN
     }
-    pub fn image_line_bytes(&self) -> usize {
-        self.image_width_px() as usize / 8
+    /// Width of the printable area in pixels.
+    pub fn printable_width_px(&self) -> u32 {
+        self.width_px - 2 * MARGIN
     }
 }
 
 /// Per-job settings that end up in the page header.
 #[derive(Debug, Clone, Copy)]
 pub struct PageSettings {
-    /// Four density bytes at header offset +8 (Canon default 0x1F).
-    pub density: [u8; 4],
-    /// Media code (`_tMediaTypeTbl`; plain paper = 1).
-    pub media_code: u8,
-    /// Paper source code (`_tPaperSourceTbl`; auto = 0).
-    pub source: u8,
+    /// Darkness (0 = printer default); written as `darkness << 2`.
+    pub darkness: u8,
+    pub toner_save: bool,
+    /// Media type (plain paper = 0).
+    pub media_type: u8,
+    /// Fuser mode for the media (plain paper = 1).
+    pub fuser_mode: u8,
 }
 
 impl Default for PageSettings {
     fn default() -> Self {
-        PageSettings { density: [0x1F; 4], media_code: 1, source: 0 }
+        PageSettings { darkness: 0, toner_save: false, media_type: 0, fuser_mode: 1 }
     }
 }
 
@@ -109,43 +124,50 @@ impl PageEncoder {
             .u16(0)
             .u16(ENGINE_ID_P1080)
             .u8(self.paper.code)
-            .u8(0)
-            .u8(s.source)
-            .u8(0)
-            .bytes(&s.density)
-            .u8(0) // media mode: model 1 has no _tModelToModeTbl entry
-            .u8(0x11)
+            .bytes(&[0, 0, 0])
+            .u8(s.darkness << 2)
+            .bytes(&[0x1C; 3])
+            .u8(s.media_type)
+            .u8(0x11) // 600 dpi
             .u8(4)
             .u8(0)
-            .u8(1) // bits per pixel
-            .u8(1) // monochrome
-            .u8(0)
-            .u8(0)
+            .u8(1)
+            .u8(1)
+            .u8(2) // automatic image refinement
+            .u8(s.toner_save as u8)
             .u16(0)
-            .u16(MARGIN_LEFT as u16)
-            .u16(MARGIN_TOP as u16)
+            .u16(MARGIN_PT)
+            .u16(MARGIN_PT)
             .u16(line_bytes as u16)
             .u16(lines as u16)
-            .u16(self.paper.width_px as u16)
-            .u16(self.paper.height_px as u16)
-            .u16(0) // flags
-            .u8(s.media_code)
+            .u16(self.paper.printable_width_px() as u16)
+            .u16(lines as u16)
+            .u16(0)
+            .u8(s.fuser_mode)
             .pad_to(44)
             .finish()
     }
 
     /// All packets for one page; `bitmap` is 1 bit per pixel, MSB first, 1 = black,
     /// `line_bytes` × `lines` (normally `image_line_bytes()` × `image_height_px()`).
+    ///
+    /// `D0A9` page setup (`D0A0`, `D0A4`, `D0A1`, `D0A2` in one packet), then each
+    /// band of [`BAND_LINES`] lines compressed on its own in `C0A0` packets, then `C0A4`.
     pub fn encode_page(&self, bitmap: &[u8], line_bytes: usize, lines: usize) -> Vec<u8> {
-        let mut out = self.page_params(line_bytes, lines);
-        out.extend(PacketBuilder::new(op::SET_REF_DESC).bytes(&self.refs.to_bytes()).finish());
-        out.extend(crate::packet::simple(op::BEGIN_DATA));
-        let data = slim::compress(bitmap, line_bytes, lines, &self.refs);
-        for chunk in data.chunks(MAX_VIDEO_CHUNK) {
-            out.extend(PacketBuilder::new(op::VIDEO_DATA).bytes(chunk).finish());
+        let mut setup = self.page_params(line_bytes, lines);
+        setup.extend(PacketBuilder::new(op::SET_REF_DESC).bytes(&self.refs.to_bytes()).finish());
+        setup.extend(crate::packet::simple(op::BEGIN_DATA));
+        setup.extend(crate::packet::simple(op::END_PAGE));
+        let mut out = PacketBuilder::new(op::PAGE_SETUP).bytes(&setup).finish();
+        for start in (0..lines).step_by(BAND_LINES) {
+            let n = BAND_LINES.min(lines - start);
+            let band = &bitmap[start * line_bytes..(start + n) * line_bytes];
+            let data = slim::compress(band, line_bytes, n, &self.refs);
+            for chunk in data.chunks(MAX_VIDEO_CHUNK) {
+                out.extend(PacketBuilder::new(op::VIDEO_DATA).bytes(chunk).finish());
+            }
         }
         out.extend(crate::packet::simple(op::VIDEO_END));
-        out.extend(crate::packet::simple(op::END_PAGE));
         out
     }
 }
@@ -158,36 +180,44 @@ mod tests {
     #[test]
     fn a4_geometry() {
         let a4 = Paper::by_name("a4").unwrap();
-        assert_eq!(a4.image_width_px(), 4736);
-        assert_eq!(a4.image_line_bytes(), 592);
-        assert_eq!(a4.image_height_px(), 6776);
+        assert_eq!(a4.image_line_bytes(), 595);
+        assert_eq!(a4.image_left_px(), 100);
+        assert_eq!(a4.image_height_px(), 6778);
+        assert_eq!(a4.printable_width_px(), 4724);
         assert_eq!(Paper::by_points(595.3, 841.9).unwrap().name, "A4");
     }
 
     #[test]
     fn page_header_layout() {
         let enc = PageEncoder::new(Paper::by_name("A4").unwrap(), PageSettings::default());
-        let p = enc.page_params(592, 6776);
+        let p = enc.page_params(595, 6778);
         assert_eq!(p.len(), 44);
         assert_eq!(&p[..8], &[0xA0, 0xD0, 44, 0, 0, 0, 0x30, 0x2A]);
         assert_eq!(p[8], 2); // A4
-        assert_eq!(&p[12..16], &[0x1F; 4]);
-        assert_eq!(&p[17..22], &[0x11, 4, 0, 1, 1]);
-        assert_eq!(u16::from_le_bytes([p[30], p[31]]), 592);
-        assert_eq!(u16::from_le_bytes([p[32], p[33]]), 6776);
+        assert_eq!(&p[12..16], &[0, 0x1C, 0x1C, 0x1C]);
+        assert_eq!(&p[16..24], &[0, 0x11, 4, 0, 1, 1, 2, 0]);
+        assert_eq!(&p[26..30], &[14, 0, 14, 0]);
+        assert_eq!(u16::from_le_bytes([p[30], p[31]]), 595);
+        assert_eq!(u16::from_le_bytes([p[32], p[33]]), 6778);
+        assert_eq!(u16::from_le_bytes([p[34], p[35]]), 4724);
+        assert_eq!(u16::from_le_bytes([p[36], p[37]]), 6778);
         assert_eq!(p[40], 1);
     }
 
     #[test]
     fn page_packet_sequence() {
         let enc = PageEncoder::new(Paper::by_name("A5").unwrap(), PageSettings::default());
-        let (lb, lines) = (enc.paper.image_line_bytes(), 64);
+        let (lb, lines) = (enc.paper.image_line_bytes(), 150);
         let bitmap = vec![0u8; lb * lines];
         let data = enc.encode_page(&bitmap, lb, lines);
-        let ops: Vec<u16> = split(&data).unwrap().iter().map(|p| header(p).unwrap().0).collect();
-        assert_eq!(
-            ops,
-            [op::SET_PAGE_PARAMS, op::SET_REF_DESC, op::BEGIN_DATA, op::VIDEO_DATA, op::VIDEO_END, op::END_PAGE]
-        );
+        let pkts = split(&data).unwrap();
+        let ops: Vec<u16> = pkts.iter().map(|p| header(p).unwrap().0).collect();
+        // 150 lines = bands of 70 + 70 + 10
+        assert_eq!(ops, [op::PAGE_SETUP, op::VIDEO_DATA, op::VIDEO_DATA, op::VIDEO_DATA, op::VIDEO_END]);
+        let inner: Vec<u16> = split(&pkts[0][4..]).unwrap().iter().map(|p| header(p).unwrap().0).collect();
+        assert_eq!(inner, [op::SET_PAGE_PARAMS, op::SET_REF_DESC, op::BEGIN_DATA, op::END_PAGE]);
+        assert_eq!(pkts[0].len(), 4 + 44 + 12 + 4 + 4);
+        let band = slim::decompress(&pkts[3][4..], lb, &enc.refs).unwrap();
+        assert_eq!(band.len(), lb * 10);
     }
 }

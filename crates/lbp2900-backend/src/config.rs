@@ -18,18 +18,11 @@ pub fn apply(opts: &mut EngineOptions, text: &str) -> Vec<String> {
             continue;
         };
         let (k, v) = (k.trim(), v.trim());
-        let flag = || matches!(v.to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on");
         let num = || v.parse::<u64>().ok();
         match k {
-            "send_job_info" => opts.send_job_info = flag(),
-            "clear_before_job" => opts.clear_before_job = flag(),
-            "start_print" => opts.start_print = flag(),
-            "go_online" => opts.go_online = flag(),
-            "go_online_arg" => opts.go_online_arg = num().unwrap_or(0) as u16,
-            "reserve_arg" => opts.reserve_arg = num().unwrap_or(0) as u16,
             "blind_session" => opts.blind_session = num().unwrap_or(0) as u16,
-            "page_timeout" => opts.page_timeout = Duration::from_secs(num().unwrap_or(120)),
-            "poll_interval_ms" => opts.poll_interval = Duration::from_millis(num().unwrap_or(500)),
+            "page_timeout" => opts.page_timeout = Duration::from_secs(num().unwrap_or(20)),
+            "poll_interval_ms" => opts.poll_interval = Duration::from_millis(num().unwrap_or(100)),
             "read_timeout_ms" => opts.read_timeout = Duration::from_millis(num().unwrap_or(5000)),
             _ => warnings.push(format!("line {}: unknown key {k}", n + 1)),
         }
@@ -51,9 +44,9 @@ mod tests {
     #[test]
     fn applies_keys() {
         let mut o = EngineOptions::default();
-        let w = apply(&mut o, "go_online = false # test\nreserve_arg=3\nbogus=1\n");
-        assert!(!o.go_online);
-        assert_eq!(o.reserve_arg, 3);
+        let w = apply(&mut o, "page_timeout = 30 # test\nblind_session=3\nbogus=1\n");
+        assert_eq!(o.page_timeout, Duration::from_secs(30));
+        assert_eq!(o.blind_session, 3);
         assert_eq!(w.len(), 1);
     }
 }
