@@ -1,0 +1,14 @@
+[package]
+name = "lbp2900-backend"
+description = "CUPS backend for the Canon LBP2900 (CAPT over USB)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "lbp2900"
+path = "src/main.rs"
+
+[dependencies]
+capt = { path = "../capt" }
+rusb = { version = "0.9", features = ["vendored"] }

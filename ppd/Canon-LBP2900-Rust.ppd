@@ -1,0 +1,121 @@
+*PPD-Adobe: "4.3"
+*%
+*% Canon LBP2900 — open-source Rust CAPT driver for macOS
+*% https://github.com/mk-manishkandel/Canon-LBP-2900-Driver-Mac-MSeries
+*%
+*FormatVersion: "4.3"
+*FileVersion: "0.1.0"
+*LanguageVersion: English
+*LanguageEncoding: ISOLatin1
+*PCFileName: "LBP2900R.PPD"
+*Manufacturer: "Canon"
+*Product: "(LBP2900)"
+*Product: "(LBP2900B)"
+*ModelName: "Canon LBP2900 (Rust CAPT)"
+*ShortNickName: "Canon LBP2900 Rust"
+*NickName: "Canon LBP2900 CAPT (Rust driver)"
+*1284DeviceID: "MFG:Canon;MDL:LBP2900;CMD:CAPT;"
+*PSVersion: "(3010.000) 0"
+*LanguageLevel: "3"
+*ColorDevice: False
+*DefaultColorSpace: Gray
+*FileSystem: False
+*Throughput: "12"
+*LandscapeOrientation: Plus90
+*TTRasterizer: Type42
+*cupsVersion: 2.2
+*cupsModelNumber: 2900
+*cupsManualCopies: True
+*cupsLanguages: "en"
+*cupsFilter: "application/vnd.cups-raster 0 /Library/Printers/LBP2900/filter/rastertocapt"
+*HWMargins: 14.40 17.04 14.40 11.52
+*MaxMediaWidth: "612"
+*MaxMediaHeight: "1008"
+
+*OpenUI *PageSize/Media Size: PickOne
+*OrderDependency: 10 AnySetup *PageSize
+*DefaultPageSize: A4
+*PageSize A4/A4: "<</PageSize[595 842]/ImagingBBox null>>setpagedevice"
+*PageSize Letter/Letter: "<</PageSize[612 792]/ImagingBBox null>>setpagedevice"
+*PageSize Legal/Legal: "<</PageSize[612 1008]/ImagingBBox null>>setpagedevice"
+*PageSize Executive/Executive: "<</PageSize[522 756]/ImagingBBox null>>setpagedevice"
+*PageSize A5/A5: "<</PageSize[420 595]/ImagingBBox null>>setpagedevice"
+*PageSize B5/B5: "<</PageSize[516 729]/ImagingBBox null>>setpagedevice"
+*PageSize Monarch/Monarch: "<</PageSize[279 540]/ImagingBBox null>>setpagedevice"
+*PageSize Com10/Com10: "<</PageSize[297 684]/ImagingBBox null>>setpagedevice"
+*PageSize DL/DL: "<</PageSize[312 624]/ImagingBBox null>>setpagedevice"
+*PageSize C5/C5: "<</PageSize[459 649]/ImagingBBox null>>setpagedevice"
+*PageSize Index3x5/Index3x5: "<</PageSize[216 360]/ImagingBBox null>>setpagedevice"
+*CloseUI: *PageSize
+
+*OpenUI *PageRegion/Media Size: PickOne
+*OrderDependency: 10 AnySetup *PageRegion
+*DefaultPageRegion: A4
+*PageRegion A4/A4: "<</PageSize[595 842]/ImagingBBox null>>setpagedevice"
+*PageRegion Letter/Letter: "<</PageSize[612 792]/ImagingBBox null>>setpagedevice"
+*PageRegion Legal/Legal: "<</PageSize[612 1008]/ImagingBBox null>>setpagedevice"
+*PageRegion Executive/Executive: "<</PageSize[522 756]/ImagingBBox null>>setpagedevice"
+*PageRegion A5/A5: "<</PageSize[420 595]/ImagingBBox null>>setpagedevice"
+*PageRegion B5/B5: "<</PageSize[516 729]/ImagingBBox null>>setpagedevice"
+*PageRegion Monarch/Monarch: "<</PageSize[279 540]/ImagingBBox null>>setpagedevice"
+*PageRegion Com10/Com10: "<</PageSize[297 684]/ImagingBBox null>>setpagedevice"
+*PageRegion DL/DL: "<</PageSize[312 624]/ImagingBBox null>>setpagedevice"
+*PageRegion C5/C5: "<</PageSize[459 649]/ImagingBBox null>>setpagedevice"
+*PageRegion Index3x5/Index3x5: "<</PageSize[216 360]/ImagingBBox null>>setpagedevice"
+*CloseUI: *PageRegion
+
+*DefaultImageableArea: A4
+*ImageableArea A4/A4: "14.40 17.04 580.60 830.48"
+*ImageableArea Letter/Letter: "14.40 17.04 597.60 780.48"
+*ImageableArea Legal/Legal: "14.40 17.04 597.60 996.48"
+*ImageableArea Executive/Executive: "14.40 17.04 507.60 744.48"
+*ImageableArea A5/A5: "14.40 17.04 405.60 583.48"
+*ImageableArea B5/B5: "14.40 17.04 501.60 717.48"
+*ImageableArea Monarch/Monarch: "14.40 17.04 264.60 528.48"
+*ImageableArea Com10/Com10: "14.40 17.04 282.60 672.48"
+*ImageableArea DL/DL: "14.40 17.04 297.60 612.48"
+*ImageableArea C5/C5: "14.40 17.04 444.60 637.48"
+*ImageableArea Index3x5/Index3x5: "14.40 17.04 201.60 348.48"
+
+*DefaultPaperDimension: A4
+*PaperDimension A4/A4: "595 842"
+*PaperDimension Letter/Letter: "612 792"
+*PaperDimension Legal/Legal: "612 1008"
+*PaperDimension Executive/Executive: "522 756"
+*PaperDimension A5/A5: "420 595"
+*PaperDimension B5/B5: "516 729"
+*PaperDimension Monarch/Monarch: "279 540"
+*PaperDimension Com10/Com10: "297 684"
+*PaperDimension DL/DL: "312 624"
+*PaperDimension C5/C5: "459 649"
+*PaperDimension Index3x5/Index3x5: "216 360"
+
+*OpenUI *Resolution/Resolution: PickOne
+*OrderDependency: 20 AnySetup *Resolution
+*DefaultResolution: 600dpi
+*Resolution 600dpi/600 DPI: "<</HWResolution[600 600]/cupsBitsPerColor 8/cupsColorOrder 0/cupsColorSpace 0/cupsCompression 0>>setpagedevice"
+*CloseUI: *Resolution
+
+*OpenUI *LBPHalftone/Halftoning: PickOne
+*OrderDependency: 30 AnySetup *LBPHalftone
+*DefaultLBPHalftone: ErrorDiffusion
+*LBPHalftone ErrorDiffusion/Smooth (error diffusion): ""
+*LBPHalftone Ordered/Pattern (ordered dither): ""
+*LBPHalftone Threshold/Text only (no greys): ""
+*CloseUI: *LBPHalftone
+
+*OpenUI *LBPDarkness/Darkness: PickOne
+*OrderDependency: 30 AnySetup *LBPDarkness
+*DefaultLBPDarkness: 0
+*LBPDarkness -2/Lightest: ""
+*LBPDarkness -1/Lighter: ""
+*LBPDarkness 0/Normal: ""
+*LBPDarkness 1/Darker: ""
+*LBPDarkness 2/Darkest: ""
+*CloseUI: *LBPDarkness
+
+*DefaultFont: Courier
+*Font Courier: Standard "(002.004S)" Standard ROM
+*Font Helvetica: Standard "(001.006S)" Standard ROM
+*Font Times-Roman: Standard "(001.007S)" Standard ROM
+*% End of Canon-LBP2900-Rust.ppd

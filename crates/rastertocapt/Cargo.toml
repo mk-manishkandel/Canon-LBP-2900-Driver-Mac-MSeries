@@ -1,0 +1,9 @@
+[package]
+name = "rastertocapt"
+description = "CUPS filter: CUPS raster → LBP2900 job stream"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+capt = { path = "../capt" }

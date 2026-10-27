@@ -1,0 +1,8 @@
+[package]
+name = "capt"
+description = "Canon CAPT protocol, Slim compression and page encoding for the LBP2900 (P1080 engine)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]

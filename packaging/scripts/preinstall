@@ -1,0 +1,4 @@
+#!/bin/sh
+# Stop the menu-bar app so its binary can be replaced.
+pkill -x lbp2900-app 2>/dev/null || true
+exit 0

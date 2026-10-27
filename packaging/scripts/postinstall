@@ -1,0 +1,21 @@
+#!/bin/sh
+# Fix permissions CUPS insists on, restart CUPS, set up the queue, start the app.
+SUPPORT=/Library/Printers/LBP2900
+
+chown root:wheel /usr/libexec/cups/backend/lbp2900 "$SUPPORT/filter/rastertocapt"
+chmod 0700 /usr/libexec/cups/backend/lbp2900     # 0700 → CUPS runs the backend as root
+chmod 0755 "$SUPPORT/filter/rastertocapt"
+
+mkdir -p /Users/Shared/LBP2900/logs
+chmod 0777 /Users/Shared/LBP2900 /Users/Shared/LBP2900/logs
+
+# Let CUPS see the new backend before creating the queue.
+launchctl kickstart -k system/org.cups.cupsd 2>/dev/null || true
+sleep 2
+"$SUPPORT/setup-queue.sh" || true
+
+USER_ID=$(stat -f %u /dev/console)
+if [ "$USER_ID" != "0" ]; then
+  launchctl asuser "$USER_ID" /usr/bin/open "/Applications/LBP2900 Driver.app" || true
+fi
+exit 0
