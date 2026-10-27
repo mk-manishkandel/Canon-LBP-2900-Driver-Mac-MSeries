@@ -33,7 +33,7 @@ install -m 0755 dist/bin/rastertocapt "$SUPPORT/filter/rastertocapt"
 install -m 0755 packaging/setup-queue.sh "$SUPPORT/setup-queue.sh"
 install -m 0755 packaging/uninstall.sh "$SUPPORT/uninstall.sh"
 install -m 0644 packaging/lbp2900.conf.example "$SUPPORT/lbp2900.conf.example"
-gzip -9 -c ppd/Canon-LBP2900-Rust.ppd > "$ROOT/Library/Printers/PPDs/Contents/Resources/Canon-LBP2900-Rust.ppd.gz"
+sed "s/^\*FileVersion: \".*\"/*FileVersion: \"$VERSION\"/" ppd/Canon-LBP2900-Rust.ppd | gzip -9 -c > "$ROOT/Library/Printers/PPDs/Contents/Resources/Canon-LBP2900-Rust.ppd.gz"
 chmod 0644 "$ROOT/Library/Printers/PPDs/Contents/Resources/Canon-LBP2900-Rust.ppd.gz"
 
 install -m 0755 dist/bin/lbp2900-app "$ROOT/Applications/$APP/Contents/MacOS/lbp2900-app"
