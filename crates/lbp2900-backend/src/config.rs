@@ -27,6 +27,7 @@ pub fn apply(opts: &mut EngineOptions, text: &str) -> Vec<String> {
             "go_online" => opts.go_online = flag(),
             "go_online_arg" => opts.go_online_arg = num().unwrap_or(0) as u16,
             "reserve_arg" => opts.reserve_arg = num().unwrap_or(0) as u16,
+            "blind_session" => opts.blind_session = num().unwrap_or(0) as u16,
             "page_timeout" => opts.page_timeout = Duration::from_secs(num().unwrap_or(120)),
             "poll_interval_ms" => opts.poll_interval = Duration::from_millis(num().unwrap_or(500)),
             "read_timeout_ms" => opts.read_timeout = Duration::from_millis(num().unwrap_or(5000)),

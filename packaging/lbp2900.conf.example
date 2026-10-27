@@ -13,3 +13,7 @@
 # page_timeout = 120        # seconds to wait for a page to finish
 # poll_interval_ms = 500
 # read_timeout_ms = 5000
+
+# Network queues (lbp2900://HOST/QUEUE?transport=lpd) cannot read the printer's
+# answers, so the session number the printer would hand out is assumed:
+# blind_session = 0

@@ -39,6 +39,10 @@ pub struct EngineOptions {
     pub user: String,
     pub host: String,
     pub title: String,
+    /// One-way link (network print server): requests are written but no response is
+    /// read, status polling is skipped and the reserve session is `blind_session`.
+    pub blind: bool,
+    pub blind_session: u16,
 }
 
 impl Default for EngineOptions {
@@ -57,6 +61,8 @@ impl Default for EngineOptions {
             user: "user".into(),
             host: "mac".into(),
             title: "document".into(),
+            blind: false,
+            blind_session: 0,
         }
     }
 }
@@ -91,6 +97,10 @@ impl<T: Transport> Engine<T> {
         let (code, _) = packet::header(pkt).unwrap_or((0, 0));
         self.log(format!(">> {code:04X} {} {}", op::name(code), hex(pkt)));
         self.io.write(pkt, self.opts.write_timeout)?;
+        if self.opts.blind {
+            let body = if code == op::RESERVE { self.opts.blind_session.to_le_bytes().to_vec() } else { vec![] };
+            return Ok(Response { opcode: code, flags: [0, 0], body });
+        }
         let mut raw = Vec::new();
         let mut buf = [0u8; 512];
         let deadline = Instant::now() + self.opts.read_timeout;
@@ -199,10 +209,12 @@ impl<T: Transport> Engine<T> {
     where
         I: IntoIterator<Item = io::Result<Vec<u8>>>,
     {
-        let id = self.device_id()?;
-        self.log(format!("device id: {id}"));
-        let st = self.status()?;
-        self.log(format!("extended status: {}", hex(&st.body)));
+        if !self.opts.blind {
+            let id = self.device_id()?;
+            self.log(format!("device id: {id}"));
+            let st = self.status()?;
+            self.log(format!("extended status: {}", hex(&st.body)));
+        }
 
         let session = self.reserve()?;
         let result = self.print_reserved(session, pages);
@@ -232,7 +244,7 @@ impl<T: Transport> Engine<T> {
         for page in pages {
             let page = page?;
             printed += 1;
-            let idle = self.status()?.body;
+            let idle = if self.opts.blind { vec![] } else { self.status()?.body };
             self.log(format!("page {printed}: idle status {}", hex(&idle)));
             let packets = packet::split(&page).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
             let mut started = false;
@@ -257,7 +269,9 @@ impl<T: Transport> Engine<T> {
                     .finish();
                 self.request(&pkt)?;
             }
-            self.wait_page_done(&idle)?;
+            if !self.opts.blind {
+                self.wait_page_done(&idle)?;
+            }
             self.request(&PacketBuilder::new(op::SET_PRINTED_PAGES).u32(printed).finish())?;
         }
         Ok(printed)
@@ -326,5 +340,34 @@ mod tests {
         assert_eq!(*ops.last().unwrap(), op::RELEASE);
         let rel = e.io.written.last().unwrap();
         assert_eq!(&rel[4..6], &[0x34, 0x12]);
+    }
+
+    /// Write-only transport: reading fails, as on a one-way network queue.
+    struct Sink(Vec<Vec<u8>>);
+
+    impl Transport for Sink {
+        fn write(&mut self, data: &[u8], _: Duration) -> io::Result<()> {
+            self.0.push(data.to_vec());
+            Ok(())
+        }
+        fn read(&mut self, _: &mut [u8], _: Duration) -> io::Result<usize> {
+            Err(io::ErrorKind::Unsupported.into())
+        }
+    }
+
+    #[test]
+    fn blind_job_never_reads() {
+        let opts = EngineOptions { blind: true, blind_session: 0x0102, ..Default::default() };
+        let mut e = Engine::new(Sink(vec![]), opts, Box::new(|_| {}));
+        let enc = crate::page::PageEncoder::new(crate::page::Paper::by_name("A5").unwrap(), Default::default());
+        let lb = enc.paper.image_line_bytes();
+        let page = enc.encode_page(&vec![0; lb * 16], lb, 16);
+        assert_eq!(e.print_job(vec![Ok(page.clone()), Ok(page)]).unwrap(), 2);
+        let ops: Vec<u16> = e.io.0.iter().map(|p| packet::header(p).unwrap().0).collect();
+        assert_eq!(ops[0], op::RESERVE);
+        assert!(!ops.contains(&op::BASIC_STATUS) && !ops.contains(&op::DEVICE_ID));
+        assert_eq!(ops.iter().filter(|&&o| o == op::START_PRINT).count(), 2);
+        let rel = e.io.0.last().unwrap();
+        assert_eq!(&rel[4..6], &[0x02, 0x01]);
     }
 }

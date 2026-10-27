@@ -2,9 +2,11 @@
 //!
 //! * no arguments          → device discovery (CUPS)
 //! * job user title copies options [file] → print a job stream from `rastertocapt`
+//!   (USB, or a print server reached over LPD; see [`lpd_target`])
 //! * `diag …`              → diagnostics for testing by hand (see `diag help`)
 
 mod config;
+mod net;
 mod testpage;
 mod usb;
 
@@ -118,6 +120,13 @@ fn wait_for_printer(uri: Option<&str>, log: &Log) -> Option<usb::Found> {
     None
 }
 
+/// `lbp2900://HOST/QUEUE?transport=lpd` → the print server's `lpd://HOST/QUEUE` URI.
+fn lpd_target(uri: &str) -> Option<String> {
+    let rest = uri.strip_prefix("lbp2900://")?;
+    let (path, query) = rest.split_once('?')?;
+    query.split('&').any(|kv| kv == "transport=lpd").then(|| format!("lpd://{path}"))
+}
+
 fn run_job(args: &[String]) -> ExitCode {
     let job = &args[1];
     let (log, path) = Log::open(&format!("job-{job}"));
@@ -144,6 +153,13 @@ fn run_job(args: &[String]) -> ExitCode {
             return ExitCode::from(CUPS_BACKEND_FAILED);
         }
     };
+
+    if let Some(target) = uri.as_deref().and_then(lpd_target) {
+        let mut opts = engine_options(&log);
+        opts.user = args[2].clone();
+        opts.title = args[3].clone();
+        return net::print_via_lpd(&target, &args[1..6], opts, &mut spool, &log);
+    }
 
     let Some(found) = wait_for_printer(uri.as_deref(), &log) else {
         eprintln!("ERROR: Canon LBP2900 not found on USB");
@@ -243,6 +259,21 @@ fn diag(args: &[String]) -> ExitCode {
             }
             _ => Err(io::ErrorKind::NotFound.into()),
         },
+        "lpd-testpage" => match args.get(3).filter(|t| t.starts_with("lpd://")) {
+            Some(target) => {
+                let paper = Paper::by_name(args.get(4).map(String::as_str).unwrap_or("A4")).unwrap_or(&capt::page::PAPERS[0]);
+                let (bitmap, lb, lines) = testpage::render(paper);
+                let page = PageEncoder::new(paper, PageSettings::default()).encode_page(&bitmap, lb, lines);
+                let opts = EngineOptions { title: "LBP2900 test page".into(), ..engine_options(&log) };
+                let job = ["0", "root", "LBP2900 test page", "1", ""].map(String::from);
+                net::send_pages(target, &job, opts, vec![Ok(page)], &log, true)
+                    .map(|n| println!("sent {n} page to {target}"))
+            }
+            None => {
+                println!("usage: lbp2900 diag lpd-testpage lpd://HOST/QUEUE [A4|Letter]");
+                Ok(())
+            }
+        },
         "testpage" => {
             let paper = Paper::by_name(args.get(3).map(String::as_str).unwrap_or("A4")).unwrap_or(&capt::page::PAPERS[0]);
             let (bitmap, lb, lines) = testpage::render(paper);
@@ -280,6 +311,7 @@ fn diag(args: &[String]) -> ExitCode {
                  \n  diag list               list connected Canon CAPT printers\
                  \n  diag status             query device id and status\
                  \n  diag testpage [A4|Letter]  print the built-in test page directly\
+                 \n  diag lpd-testpage lpd://HOST/QUEUE [A4|Letter]  send it through a print server\
                  \n  diag raw \"A0 A8 04 00\"  send one CAPT request and show the reply\
                  \n  diag dump <file>        decode a job stream written by rastertocapt\
                  \n\nLogs: {}",
@@ -311,5 +343,19 @@ fn main() -> ExitCode {
             eprintln!("Usage: lbp2900 job-id user title copies options [file]\n       lbp2900 diag help");
             ExitCode::from(CUPS_BACKEND_FAILED)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::lpd_target;
+
+    #[test]
+    fn parses_lpd_uri() {
+        assert_eq!(
+            lpd_target("lbp2900://172.50.0.12/ITCanonLBP2900?transport=lpd").as_deref(),
+            Some("lpd://172.50.0.12/ITCanonLBP2900")
+        );
+        assert_eq!(lpd_target("lbp2900://Canon/LBP2900?serial=0000A1B2"), None);
     }
 }

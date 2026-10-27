@@ -59,6 +59,22 @@ Logs are written to `/Users/Shared/LBP2900/logs/` (menu-bar app → **Open Logs 
 Every exchange with the printer is logged in hex. Please attach these logs to a
 GitHub issue together with what the printer did (lights, noises, paper fed or not).
 
+### Printer shared by another computer (LPD), experimental
+
+If the printer hangs off another computer's USB port and that computer shares it
+over LPD (e.g. a Windows PC with *LPD Print Service*), point the queue at it with
+`transport=lpd`:
+
+```sh
+sudo /usr/libexec/cups/backend/lbp2900 diag lpd-testpage lpd://HOST/QUEUE
+sudo lpadmin -p Canon_LBP2900 -E -v 'lbp2900://HOST/QUEUE?transport=lpd' \
+  -P /Library/Printers/PPDs/Contents/Resources/Canon-LBP2900-Rust.ppd.gz
+```
+
+The print server never passes the printer's answers back, so the driver sends the
+whole conversation without waiting for replies: no paper/jam status, and the session
+number is assumed (`blind_session`). USB is the reliable way to connect.
+
 ### Tuning switches
 
 `/Library/Printers/LBP2900/lbp2900.conf.example` lists switches for the steps
