@@ -1,5 +1,6 @@
 //! macOS menu-bar UI.
 
+use std::path::PathBuf;
 use std::process::Command;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
@@ -26,6 +27,7 @@ enum Msg {
     UpToDate,
     Info(String),
     Installed,
+    UpdateFailed(Release, String),
 }
 
 /// 22×22 template icon: a simple printer silhouette.
@@ -121,20 +123,23 @@ fn check_updates(tx: &Sender<Msg>, manual: bool) {
 fn install_update(tx: &Sender<Msg>, rel: Release) {
     spawn(tx, move |tx| {
         let _ = tx.send(Msg::Info(format!("Downloading {}…", rel.version)));
-        let dest = std::env::temp_dir().join(format!("LBP2900-Driver-{}.pkg", rel.version));
-        if let Err(e) = updater::download(&rel.pkg_url, &dest) {
-            let _ = tx.send(Msg::Info(e));
-            return;
-        }
-        let cmd = format!("/usr/sbin/installer -pkg '{}' -target /", dest.display());
-        match run_admin(&cmd) {
-            Ok(_) => {
-                let _ = tx.send(Msg::Installed);
-            }
-            Err(e) => {
-                let _ = tx.send(Msg::Info(format!("Install failed: {e}")));
-            }
-        }
+        // Not temp_dir(): an app started by an installer inherits its sandbox TMPDIR,
+        // which is deleted once that install finishes.
+        let dir = PathBuf::from(std::env::var_os("HOME").unwrap_or_else(|| "/Users/Shared".into()))
+            .join("Library/Caches/io.github.mk-manishkandel.lbp2900");
+        let dest = dir.join(format!("LBP2900-Driver-{}.pkg", rel.version));
+        let result = std::fs::create_dir_all(&dir)
+            .map_err(|e| format!("cannot create {}: {e}", dir.display()))
+            .and_then(|()| updater::download(&rel.pkg_url, &dest))
+            .and_then(|()| {
+                let cmd = format!("/usr/sbin/installer -pkg '{}' -target /", dest.display());
+                run_admin(&cmd).map_err(|e| format!("Install failed: {e}"))
+            });
+        let _ = std::fs::remove_file(&dest);
+        let _ = tx.send(match result {
+            Ok(_) => Msg::Installed,
+            Err(e) => Msg::UpdateFailed(rel, e),
+        });
     });
 }
 
@@ -215,6 +220,12 @@ pub fn run() {
                 }
                 Msg::UpToDate => notify(&format!("You have the latest version ({})", updater::CURRENT)),
                 Msg::Info(s) => notify(&s),
+                Msg::UpdateFailed(r, e) => {
+                    ui.update.set_text(format!("Install Update {}… (last try failed)", r.version));
+                    ui.update.set_enabled(true);
+                    notify(&format!("Update {} failed: {e}", r.version));
+                    pending = Some(r);
+                }
                 Msg::Installed => {
                     notify("Update installed — restarting");
                     let _ = Command::new("/usr/bin/open").args(["-n", APP_PATH]).spawn();

@@ -14,8 +14,13 @@ launchctl kickstart -k system/org.cups.cupsd 2>/dev/null || true
 sleep 2
 "$SUPPORT/setup-queue.sh" || true
 
+# Start the app through launchd so it gets the user's normal environment; an app
+# opened from here inherits the installer's TMPDIR, which is deleted afterwards.
+AGENT=/Library/LaunchAgents/io.github.mk-manishkandel.lbp2900.app.plist
 USER_ID=$(stat -f %u /dev/console)
 if [ "$USER_ID" != "0" ]; then
-  launchctl asuser "$USER_ID" /usr/bin/open "/Applications/LBP2900 Driver.app" || true
+  launchctl bootout "gui/$USER_ID" "$AGENT" 2>/dev/null || true
+  launchctl bootstrap "gui/$USER_ID" "$AGENT" 2>/dev/null ||
+    launchctl asuser "$USER_ID" /usr/bin/open "/Applications/LBP2900 Driver.app" || true
 fi
 exit 0

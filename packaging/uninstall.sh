@@ -2,6 +2,8 @@
 # Remove the LBP2900 Rust driver. Run with: sudo /Library/Printers/LBP2900/uninstall.sh
 set -e
 ID=io.github.mk-manishkandel.lbp2900
+USER_ID=$(stat -f %u /dev/console)
+launchctl bootout "gui/$USER_ID" "/Library/LaunchAgents/$ID.app.plist" 2>/dev/null || true
 pkill -x lbp2900-app 2>/dev/null || true
 /usr/sbin/lpadmin -x Canon_LBP2900 2>/dev/null || true
 rm -f /usr/libexec/cups/backend/lbp2900
